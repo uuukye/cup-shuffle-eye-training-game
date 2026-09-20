@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Handjet:wght,ELSH@100..900,2&display=swap" rel="stylesheet">
+    <style>
+        html, body { margin: 0; padding: 0; overflow: hidden; background-color: rgb(4, 19, 12); }
+        canvas { display: block; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <title>cup shuffle eye training</title>
+</head>
+<body>
+<script>
+    let gameState = "level";
+    let selectedLevel = 1;
+
+    let goldY = 550;
+    let start = false;
+    let ready = false;
+    let reveal = false;
+    let won = false;
+    let lvlT = "";
+
+    let numCups = 3;
+    let lerpSpeed = 0.2;
+    let pauseD = 18;
+    let switches = 15;
+
+    let cup1x = -200;
+    let cup1t = -200;
+    let cup2x = 100;
+    let cup2t = 100;
+    let cup3x = -50;
+    let cup3t = -50; 
+    let cup4x = -350;
+    let cup4t = -350;
+    let cup5x = 250;
+    let cup5t = 250;
+
+    let switchAmt = 20;
+    let flashTimer = 0;
+    let flashColor;
+
+    let activeC1 = 0;
+    let activeC2 = 0;
+    let pauseTimer = 0;
+
+    function setup(){
+        createCanvas(windowWidth, windowHeight);
+        noStroke();
+        textFont('Handjet');
+        textStyle(BOLD);
+        textAlign(CENTER, CENTER);
+    }
+    
+    function windowResized(){
+        resizeCanvas(windowWidth, windowHeight);
+    }
+
+    function bgDesign(){
+        fill(5, 22, 11);
+        for(let x = 0; x < windowWidth + 150; x += 100){
+            for(let y = 0; y < windowHeight + 150; y += 100){
+                circle(x, y, 100);
+            }
+        }
+    }
+
+    function setLevel(lvl) {
+        selectedLevel = lvl;
+        if (lvl <= 5) {
+            numCups = 3;
+            lerpSpeed = map(lvl, 1, 5, 0.14, 0.35);
+            pauseD = round(map(lvl, 1, 5, 22, 9));
+            switches = round(map(lvl, 1, 5, 10, 20));
+        } else if (lvl < 10) {
+            numCups = 5;
+            lerpSpeed = map(lvl, 6, 9, 0.22, 0.48);
+            pauseD = round(map(lvl, 6, 9, 15, 3));
+            switches = round(map(lvl, 6, 9, 16, 28));
+        } else {
+            numCups = 3;
+            lerpSpeed = 0.03;
+            pauseD = 40;
+            switches = 5;
+        }
+
+        if (numCups === 3) {
+            cup1x = -200; cup1t = -200;
+            cup3x = -50;  cup3t = -50; 
+            cup2x = 100;  cup2t = 100;
+            cup4x = -350; cup4t = -350;
+            cup5x = 250;  cup5t = 250;
+        } else {
+            cup1x = -350; cup1t = -350;
+            cup2x = -200; cup2t = -200;
+            cup3x = -50;  cup3t = -50; 
+            cup4x = 100;  cup4t = 100;
+            cup5x = 250;  cup5t = 250;
+        }
+
+        switchAmt = switches;
+        start = true;
+        ready = false;
+        reveal = false;
+        goldY = 550;
+        activeC1 = 0;
+        activeC2 = 0;
+        pauseTimer = 0;
+        flashTimer = 0;
+    }
+
+    function draw(){
+        background(4, 19, 12);
+        bgDesign();
+
+        if (gameState === "level") {
+            screen();
+            return;
+        }
+        
+        fill(25, 55, 35);
+        ellipse(width / 2, 455, 1000, 180);
+
+        fill(255);
+        textStyle(BOLD);
+        textSize(70);
+        text("eye training", width / 2, 80);
+        textSize(36);
+        textStyle(NORMAL);
+        fill(205, 185, 30);
+        text(`LEVEL ${selectedLevel}  •  ${numCups} CUPS`, width / 2, 140);
+        fill(255);
+        textSize(32);
+        text("find the gold", width / 2, 180);
+        
+        if(!start){
+            textSize(40);
+            text("click to start", width / 2, 650);
+        } else if (switchAmt < 1 && !reveal) {
+            textSize(40);
+            text("click a cup to guess", width / 2, 650);
+        } else if (reveal) {
+            textSize(36);
+            if (won && selectedLevel < 10) {
+                text("yay! you beat the level! click for next level", width / 2, 640);
+            } else if (won && selectedLevel === 10) {
+                text("yayay! you beat the game!", width / 2, 640);
+            } else {
+                text("retry?", width / 2, 640);
+            }
+        }
+
+        findGold();
+        drawShadows();
+        
+        drawCups();
+        
+        if(ready && !reveal){
+            switchCups();
+            
+            cup1x = lerp(cup1x, cup1t, lerpSpeed);
+            cup2x = lerp(cup2x, cup2t, lerpSpeed);
+            cup3x = lerp(cup3x, cup3t, lerpSpeed);
+            if(numCups === 5){
+                cup4x = lerp(cup4x, cup4t, lerpSpeed);
+                cup5x = lerp(cup5x, cup5t, lerpSpeed);
+            }
+
+            Indicator();
+        }
+
+        if (reveal && selectedLevel === 10) {
+            cup4x = lerp(cup4x, cup4t, 0.08);
+        }
+
+        if(flashTimer > 0){
+            let alphaVal = map(flashTimer, 0, 60, 0, 150);
+            fill(red(flashColor), green(flashColor), blue(flashColor), alphaVal);
+            rect(0, 0, width, height);
+            flashTimer--;
+        }
+
+        button();
+    }
+
+    function screen() {
+        fill(255);
+        textSize(80);
+        textStyle(BOLD);
+        text("cup shuffle eye training", width / 2, 110);
+        textSize(40);
+        fill(205, 185, 30);
+        textStyle(NORMAL);
+        text("select difficulty level", width / 2, 175);
+
+        for (let i = 1; i <= 10; i++) {
+            let col = (i - 1) % 5;
+            let row = floor((i - 1) / 5);
+            let btnX = width / 2 - 280 + col * 140;
+            let btnY = 280 + row * 150;
+
+            let hovered = mouseX > btnX - 55 && mouseX < btnX + 55 && mouseY > btnY - 45 && mouseY < btnY + 45;
+
+            fill(hovered ? color(255, 10, 2) : color(25, 55, 35));
+            stroke(hovered ? color(255) : color(205, 185, 30));
+            strokeWeight(3);
+            rect(btnX - 55, btnY - 45, 110, 90, 12);
+            noStroke();
+
+            fill(255);
+            textSize(42);
+            text(`LVL ${i}`, btnX, btnY - 10);
+            textSize(22);
+            fill(i <= 5 ? color(180, 255, 180) : color(255, 200, 150));
+            if(i==1){
+                lvlT="beginner";
+            }else if(i==2){
+                lvlT="ez";
+            }else if(i==3){
+                lvlT="chill";
+            }else if(i==4){
+                lvlT="mild";
+            }else if(i==5){
+                lvlT="normal";
+            }else if(i==6){
+                lvlT="medium";
+            }else if(i==7){
+                lvlT="semi-hard";
+            }else if(i==8){
+                lvlT="hard";
+            }else if(i==9){
+                lvlT="insane";
+            }else{
+                lvlT="troll";
+            }
+            text(lvlT, btnX, btnY + 22);
+        }
+    }
+
+    function button() {
+        let btnX = 90;
+        let btnY = 40;
+        let hovered = mouseX > 20 && mouseX < 160 && mouseY > 20 && mouseY < 60;
+        fill(hovered ? color(255, 2, 10) : color(25, 55, 35));
+        stroke(205, 185, 30);
+        strokeWeight(2);
+        rect(20, 20, 140, 40, 8);
+        noStroke();
+        fill(255);
+        textSize(24);
+        text("⚙ levels", 90, 40);
+    }
+    
+    function mousePressed(){
+        if (gameState === "playing" && mouseX > 20 && mouseX < 160 && mouseY > 20 && mouseY < 60) {
+            gameState = "level";
+            return;
+        }
+
+        if (gameState === "level") {
+            for (let i = 1; i <= 10; i++) {
+                let col = (i - 1) % 5;
+                let row = floor((i - 1) / 5);
+                let btnX = width / 2 - 280 + col * 140;
+                let btnY = 280 + row * 150;
+
+                if (mouseX > btnX - 55 && mouseX < btnX + 55 && mouseY > btnY - 45 && mouseY < btnY + 45) {
+                    setLevel(i);
+                    gameState = "playing";
+                    return;
+                }
+            }
+            return;
+        }
+
+        if(!start){
+            start = true;
+        } else if (switchAmt < 1 && !reveal) {
+            let mx = mouseX - width / 2;
+            let my = mouseY;
+            let clicked = -1;
+            
+            if(my > 250 && my < 450){
+                if(mx > cup1x && mx < cup1x + 100) clicked = 1;
+                else if(mx > cup2x && mx < cup2x + 100) clicked = 2;
+                else if(mx > cup3x && mx < cup3x + 100) clicked = 3;
+                else if(numCups === 5) {
+                    if(mx > cup4x && mx < cup4x + 100) clicked = 4;
+                    else if(mx > cup5x && mx < cup5x + 100) clicked = 5;
+                }
+            }
+
+            if(clicked !== -1){
+                reveal = true;
+                if(selectedLevel === 10){
+                    flashColor = color(255, 0, 0);
+                    won = false;
+                    cup4x = width;
+                    cup4t = 250;
+                } else if(clicked === 3){
+                    flashColor = color(0, 255, 0);
+                    won = true;
+                } else {
+                    flashColor = color(255, 0, 0);
+                    won = false;
+                }
+                flashTimer = 60;
+            }
+        } else if (reveal) {
+            if (won && selectedLevel < 10) {
+                setLevel(selectedLevel + 1);
+            } else if (won && selectedLevel === 10) {
+                gameState = "level";
+            } else {
+                setLevel(selectedLevel);
+            }
+        }
+    }
+
+    function switchCups(){
+        if(switchAmt < 1) {
+            activeC1 = 0;
+            activeC2 = 0;
+            return;
+        }
+
+        let moving = abs(cup1x - cup1t) > 1.5 || abs(cup2x - cup2t) > 1.5 || abs(cup3x - cup3t) > 1.5 ||
+                     (numCups === 5 && (abs(cup4x - cup4t) > 1.5 || abs(cup5x - cup5t) > 1.5));
+
+        if (moving) return;
+
+        cup1x = cup1t; cup2x = cup2t; cup3x = cup3t;
+        if(numCups === 5){ cup4x = cup4t; cup5x = cup5t; }
+        
+        if (pauseTimer > 0) {
+            pauseTimer--;
+            activeC1 = 0;
+            activeC2 = 0;
+            return;
+        }
+
+        switchAmt--;
+        if(switchAmt < 1) {
+            activeC1 = 0;
+            activeC2 = 0;
+            return;
+        }
+
+        let maxCup = numCups;
+        let c1 = floor(random(1, maxCup + 1));
+        let c2 = floor(random(1, maxCup + 1));
+        while(c1 === c2){
+            c2 = floor(random(1, maxCup + 1));
+        }
+
+        activeC1 = c1;
+        activeC2 = c2;
+
+        let getT = (c) => {
+            if(c === 1) return cup1t;
+            if(c === 2) return cup2t;
+            if(c === 3) return cup3t;
+            if(c === 4) return cup4t;
+            return cup5t;
+        }
+
+        let t1 = getT(c1);
+        let t2 = getT(c2);
+
+        let setT = (c, val) => {
+            if(c === 1) cup1t = val;
+            if(c === 2) cup2t = val;
+            if(c === 3) cup3t = val;
+            if(c === 4) cup4t = val;
+            if(c === 5) cup5t = val;
+        }
+
+        setT(c1, t2);
+        setT(c2, t1);
+
+        pauseTimer = pauseD; 
+    }
+
+    function Indicator(){
+        if(switchAmt > 0){
+            let getX = (c) => {
+                if(c === 1) return cup1x;
+                if(c === 2) return cup2x;
+                if(c === 3) return cup3x;
+                if(c === 4) return cup4x;
+                return cup5x;
+            };
+
+            for(let c = 1; c <= numCups; c++){
+                let x = width / 2 + getX(c) + 50;
+                let isActive = (c === activeC1 || c === activeC2);
+
+                if(isActive){
+                    fill(255, 50, 50, 255);
+                } else {
+                    fill(255, 50, 50, 40);
+                }
+                triangle(x - 12, 215, x + 12, 215, x, 238);
+            }
+        }
+    }
+
+    function findGold(){
+        let tx = (selectedLevel === 10 && reveal) ? cup4x : cup3x;
+        fill(205, 185, 30);
+        circle(width / 2 + tx + 50, goldY, 60);
+        fill(205, 205, 30);
+        circle(width / 2 + tx + 50, goldY, 45);
+        if(start && !reveal){
+            goldY = lerp(goldY, 290, 0.08);
+            if(goldY <= 305){
+                ready = true;
+            }
+        } else if (reveal) {
+            goldY = lerp(goldY, 560, 0.1);
+        }
+    }
+
+    function drawShadows(){
+        fill(0, 0, 0, 150);
+        ellipse(width / 2 + cup1x + 50, 460, 140, 30);
+        ellipse(width / 2 + cup2x + 50, 460, 140, 30);
+        ellipse(width / 2 + cup3x + 50, 460, 140, 30);
+        if (numCups === 5 || (selectedLevel === 10 && reveal)) {
+            ellipse(width / 2 + cup4x + 50, 460, 140, 30);
+            if (numCups === 5) ellipse(width / 2 + cup5x + 50, 460, 140, 30);
+        }
+    }
+
+    function drawSingleCup(cx) {
+        fill(255, 40, 20); rect(width / 2 + cx, 250, 100, 51);
+        fill(255, 60, 30); rect(width / 2 + cx, 300, 100, 51);
+        fill(255, 80, 50); rect(width / 2 + cx, 350, 100, 51);
+        fill(255, 90, 60); rect(width / 2 + cx, 400, 100, 50);
+        fill(200); rect(width / 2 + cx - 5, 435, 110, 9);
+        fill(220); rect(width / 2 + cx - 5, 444, 110, 7);
+    }
+
+    function drawCups(){
+        drawSingleCup(cup1x);
+        drawSingleCup(cup2x);
+        drawSingleCup(cup3x);
+        if (numCups === 5 || (selectedLevel === 10 && reveal)) {
+            drawSingleCup(cup4x);
+            if (numCups === 5) drawSingleCup(cup5x);
+        }
+    }
+</script>
+</body>
+</html>
